@@ -16,12 +16,15 @@ from mkdocs.structure.files import File
 log = get_plugin_logger(__name__)
 
 
-def gen_anchor_redirects(anchor_list: list):
+def gen_anchor_redirects(anchor_list: list[tuple[str, str]]) -> str:
     """
     Generate a dictionary of redirects for anchors.
 
-    :param anchor_list: A list of tuples containing old anchors and new links.
-    :return: A string of JavaScript redirects for the anchors.
+    Args:
+        anchor_list: A list of tuples containing old anchors and new links.
+
+    Returns:
+        A string of JavaScript redirects for the anchors.
     """
     js_redirects = ""
     for old_anchor, new_link in anchor_list:
@@ -103,7 +106,7 @@ class RedirectEntry(TypedDict):
     overall: str
 
 
-def build_redirect_entries(redirects: dict) -> dict[str, RedirectEntry]:
+def build_redirect_entries(redirects: dict[str, str]) -> dict[str, RedirectEntry]:
     """
     This builds a more-detailed lookup table from the original old->new page mappings.
 
@@ -130,10 +133,11 @@ def build_redirect_entries(redirects: dict) -> dict[str, RedirectEntry]:
 
 class RedirectPlugin(BasePlugin):
     config_scheme = (
-        ("redirect_maps", config_options.Type(dict, default={})),  # note the trailing comma
+        ("redirect_maps", config_options.Type(dict[str, str], default={})),  # note the trailing comma
     )
 
     redirect_entries: dict[str, RedirectEntry]
+    redirects: dict[str, str]
 
     # Build an initial list of redirects after we know about all documentation pages.
     def on_files(self, files, config, **kwargs):
