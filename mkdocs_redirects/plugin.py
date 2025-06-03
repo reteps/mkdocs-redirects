@@ -115,7 +115,7 @@ def build_redirect_entries(redirects: dict[str, str]) -> dict[str, RedirectEntry
     """
     redirect_entries: dict[str, RedirectEntry] = {}
     for page_old, page_new in redirects.items():
-        page_old_without_hash, old_hash = _split_hash_fragment(str(page_old))
+        page_old_without_hash, old_hash = _split_hash_fragment(page_old)
         if page_old_without_hash not in redirect_entries:
             redirect_entries[page_old_without_hash] = {"hashes": [], "overall": ""}
         if old_hash == "":
@@ -145,7 +145,7 @@ class RedirectPlugin(BasePlugin):
 
         # Validate that all user-provided redirects come from markdown files.
         for page_old in self.redirects:
-            page_old_without_hash, _ = _split_hash_fragment(str(page_old))
+            page_old_without_hash, _ = _split_hash_fragment(page_old)
             if not utils.is_markdown_file(page_old_without_hash):
                 log.warning(
                     "redirects plugin: '%s' is not a valid markdown file!", page_old_without_hash
@@ -168,7 +168,7 @@ class RedirectPlugin(BasePlugin):
         hash_redirects = self.redirect_entries[page_old]["hashes"]
         for i in range(len(hash_redirects)):
             old_hash, new_link = hash_redirects[i]
-            hash_redirect_without_hash, new_hash = _split_hash_fragment(str(new_link))
+            hash_redirect_without_hash, new_hash = _split_hash_fragment(new_link)
 
             # If we are redirecting to a page that exists, update the destination hash path.
             if hash_redirect_without_hash in self.doc_pages:
@@ -190,7 +190,7 @@ class RedirectPlugin(BasePlugin):
     def on_post_build(self, config, **kwargs):
         use_directory_urls = config.get("use_directory_urls")
         for page_old, redirect_entry in self.redirect_entries.items():
-            page_old_without_hash, _ = _split_hash_fragment(str(page_old))
+            page_old_without_hash, _ = _split_hash_fragment(page_old)
 
             # If the old page is a valid document page, it was injected in `on_page_content`.
             if page_old_without_hash in self.doc_pages:
@@ -198,7 +198,7 @@ class RedirectPlugin(BasePlugin):
 
             # Get new page without hash fragment to correctly verify existence.
             page_new = redirect_entry["overall"]
-            page_new_without_hash, new_hash = _split_hash_fragment(str(page_new))
+            page_new_without_hash, new_hash = _split_hash_fragment(page_new)
 
             # External redirect targets are easy, just use it as the target path
             if page_new.lower().startswith(("http://", "https://")):
