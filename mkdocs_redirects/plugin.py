@@ -174,8 +174,8 @@ class RedirectPlugin(BasePlugin):
             if hash_redirect_without_hash in self.doc_pages:
                 file = self.doc_pages[hash_redirect_without_hash]
                 dest_hash_path = get_relative_html_path(
-                    page_old, file.url + new_hash, use_directory_urls
-                )
+                    page_old, get_html_path(file.src_uri, use_directory_urls), use_directory_urls
+                ) + new_hash
                 hash_redirects[i] = (old_hash, dest_hash_path)
 
         for old_hash, new_link in hash_redirects:
@@ -229,8 +229,8 @@ class RedirectPlugin(BasePlugin):
                 if hash_redirect_without_hash in self.doc_pages:
                     file = self.doc_pages[hash_redirect_without_hash]
                     dest_hash_path = get_relative_html_path(
-                        page_old, file.url + new_hash, use_directory_urls
-                    )
+                        page_old, get_html_path(file.src_uri, use_directory_urls), use_directory_urls
+                    ) + new_hash
                     hash_redirects[i] = (old_hash, dest_hash_path)
 
             log.info(f"Creating redirect for '{page_old}' to '{dest_path}'")

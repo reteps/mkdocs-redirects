@@ -131,3 +131,264 @@ def test_page_dest_path_no_directory_urls(actual_written_file, old_page, expecte
 @pytest.mark.parametrize(["old_page", "_", "expected"], testdata)
 def test_page_dest_path_directory_urls(actual_written_file, old_page, _, expected):
     assert actual_written_file == expected
+
+
+# ============================================================================
+# Hash Redirect Test Suite
+# ============================================================================
+
+@pytest.fixture
+def mock_write_html(monkeypatch):
+    """Mock the write_html function to capture calls."""
+    calls = []
+
+    def mock_write(site_dir, old_path, new_path, anchor_list):
+        calls.append((site_dir, old_path, new_path, anchor_list))
+
+    monkeypatch.setattr(plugin, "write_html", mock_write)
+    return calls
+
+
+class TestHashRedirectGeneration:
+    """Test suite for hash redirect generation functionality."""
+
+    def test_gen_anchor_redirects_single_hash(self):
+        """Test generating JavaScript redirects for a single hash."""
+        anchor_list = [("#old-hash", "new-page.html#new-hash")]
+        result = plugin.gen_anchor_redirects(anchor_list)
+
+        expected = '''
+        if (window.location.hash === "#old-hash") {
+            location.href = "new-page.html#new-hash";
+        }
+        '''
+        assert result.strip() == expected.strip()
+
+    def test_gen_anchor_redirects_multiple_hashes(self):
+        """Test generating JavaScript redirects for multiple hashes."""
+        anchor_list = [
+            ("#old-hash1", "new-page.html#new-hash1"),
+            ("#old-hash2", "new-page.html#new-hash2"),
+            ("#old-hash3", "new-page.html#new-hash3")
+        ]
+        result = plugin.gen_anchor_redirects(anchor_list)
+
+        assert "if (window.location.hash === \"#old-hash1\")" in result
+        assert "location.href = \"new-page.html#new-hash1\"" in result
+        assert "if (window.location.hash === \"#old-hash2\")" in result
+        assert "location.href = \"new-page.html#new-hash2\"" in result
+        assert "if (window.location.hash === \"#old-hash3\")" in result
+        assert "location.href = \"new-page.html#new-hash3\"" in result
+
+    def test_gen_anchor_redirects_empty_list(self):
+        """Test generating JavaScript redirects for empty anchor list."""
+        result = plugin.gen_anchor_redirects([])
+        assert result == ""
+
+
+class TestHashRedirectJavaScriptInjection:
+    """Test suite for JavaScript injection in existing pages."""
+
+    @pytest.fixture
+    def plugin_instance(self):
+        """Create a plugin instance for testing."""
+        plg = plugin.RedirectPlugin()
+        plg.redirects = {
+            "test-page.md#old-hash": "new-page.md#new-hash",
+            "test-page.md#another-hash": "new-page.md#another-new-hash"
+        }
+        plg.redirect_entries = plugin.build_redirect_entries(plg.redirects)
+        plg.doc_pages = {
+            "test-page.md": File("test-page.md", "docs", "site", False),
+            "new-page.md": File("new-page.md", "docs", "site", False)
+        }
+        return plg
+
+    def test_on_page_content_with_hash_redirects(self, plugin_instance):
+        """Test that JavaScript is injected for pages with hash redirects."""
+        config = {"use_directory_urls": False}
+        page = Page(None, plugin_instance.doc_pages["test-page.md"], config)
+
+        original_html = "<html><body>Original content</body></html>"
+        result = plugin_instance.on_page_content(original_html, page, config, None)
+
+        # Should contain JavaScript redirects
+        assert "<script>" in result
+        assert "window.location.hash" in result
+        assert "location.href" in result
+        assert "old-hash" in result
+        assert "new-hash" in result
+        assert "another-hash" in result
+        assert "another-new-hash" in result
+        # Original content should be preserved
+        assert "Original content" in result
+
+    def test_on_page_content_without_hash_redirects(self, plugin_instance):
+        """Test that no JavaScript is injected for pages without hash redirects."""
+        config = {"use_directory_urls": False}
+        page = Page(None, plugin_instance.doc_pages["new-page.md"], config)
+
+        original_html = "<html><body>Original content</body></html>"
+        result = plugin_instance.on_page_content(original_html, page, config, None)
+
+        # Should return original HTML unchanged
+        assert result == original_html
+
+    def test_on_page_content_with_page_and_hash_redirects(self, plugin_instance):
+        """Test JavaScript injection when both page and hash redirects exist."""
+        plugin_instance.redirects["test-page.md"] = "new-page.md"
+        plugin_instance.redirect_entries = plugin.build_redirect_entries(plugin_instance.redirects)
+
+        config = {"use_directory_urls": False}
+        page = Page(None, plugin_instance.doc_pages["test-page.md"], config)
+
+        original_html = "<html><body>Original content</body></html>"
+        result = plugin_instance.on_page_content(original_html, page, config, None)
+
+        # Should still contain JavaScript for hash redirects
+        assert "<script>" in result
+        assert "window.location.hash" in result
+        assert "Original content" in result
+
+
+class TestHashRedirectHTMLGeneration:
+    """Test suite for HTML file generation with hash redirects."""
+
+    def test_no_directory_urls(self, mock_write_html):
+        """Test HTML generation with multiple hash redirects."""
+        plg = plugin.RedirectPlugin()
+        plg.redirects = {
+            "old-page.md#hash1": "new-page.md#new-hash1",
+            "old-page.md#hash2": "new-page.md#new-hash2",
+            "old-page.md#hash3": "new-page.md#new-hash3"
+        }
+        plg.redirect_entries = plugin.build_redirect_entries(plg.redirects)
+        plg.doc_pages = {
+            "new-page.md": File("new-page.md", "docs", "site", False)
+        }
+
+        config = {"use_directory_urls": False, "site_dir": "site"}
+        plg.on_post_build(config)
+
+        assert len(mock_write_html) == 1
+        _, _, _, anchor_list = mock_write_html[0]
+        assert anchor_list == [("#hash1", "new-page.html#new-hash1"), ("#hash2", "new-page.html#new-hash2"), ("#hash3", "new-page.html#new-hash3")]
+
+    def test_directory_urls(self, mock_write_html):
+        """Test HTML generation with multiple hash redirects."""
+        plg = plugin.RedirectPlugin()
+        plg.redirects = {
+            "old-page.md#hash1": "new-page.md#new-hash1",
+            "old-page.md#hash2": "new-page.md#new-hash2",
+            "old-page.md#hash3": "new-page.md#new-hash3"
+        }
+        plg.redirect_entries = plugin.build_redirect_entries(plg.redirects)
+        plg.doc_pages = {
+            "new-page.md": File("new-page.md", "docs", "site", False)
+        }
+
+        config = {"use_directory_urls": True, "site_dir": "site"}
+        plg.on_post_build(config)
+
+        assert len(mock_write_html) == 1
+        _, _, _, anchor_list = mock_write_html[0]
+        assert anchor_list == [("#hash1", "../new-page/index.html/#new-hash1"), ("#hash2", "../new-page/index.html/#new-hash2"), ("#hash3", "../new-page/index.html/#new-hash3")]
+
+    def test_external_url(self, mock_write_html):
+        """Test hash redirects to external URLs."""
+        plg = plugin.RedirectPlugin()
+
+        plg.redirects = {"old-page.md#old-hash": "https://example.com/page#new-hash"}
+        plg.redirect_entries = plugin.build_redirect_entries(plg.redirects)
+        plg.doc_pages = {}
+
+        config = {"use_directory_urls": False, "site_dir": "site"}
+        plg.on_post_build(config)
+
+        assert len(mock_write_html) == 1
+        _, old_path, new_path, anchor_list = mock_write_html[0]
+        assert anchor_list == [("#old-hash", "https://example.com/page#new-hash")]
+
+    def test_empty_hash(self):
+        """Test hash redirects with empty hash fragments."""
+        redirects = {"old-page.md#": "new-page.md#"}
+        result = plugin.build_redirect_entries(redirects)
+
+        expected = {
+            "old-page.md": {
+                "hashes": [("#", "new-page.md#")],
+                "overall": "new-page.md#"
+            }
+        }
+        assert result == expected
+
+
+class TestHashRedirectIntegration:
+    """Integration tests for hash redirect functionality."""
+
+    @pytest.fixture
+    def integration_plugin(self):
+        """Create a plugin instance for integration testing."""
+        plg = plugin.RedirectPlugin()
+        plg.redirects = {
+            "old-page.md": "new-page.md",
+            "old-page.md#section1": "new-page.md#new-section1",
+            "old-page.md#section2": "new-page.md#new-section2",
+            "another-page.md#old-hash": "external-page.md#new-hash"
+        }
+        plg.redirect_entries = plugin.build_redirect_entries(plg.redirects)
+        plg.doc_pages = {
+            "old-page.md": File("old-page.md", "docs", "site", False),
+            "new-page.md": File("new-page.md", "docs", "site", False),
+            "external-page.md": File("external-page.md", "docs", "site", False)
+        }
+        return plg
+
+    def test_integration_hash_redirect_workflow(self, integration_plugin, mock_write_html):
+        """Test the complete hash redirect workflow."""
+        config = {"use_directory_urls": False, "site_dir": "site"}
+
+        # Test page content injection
+        page = Page(None, integration_plugin.doc_pages["old-page.md"], config)
+        original_html = "<html><body>Content</body></html>"
+        result = integration_plugin.on_page_content(original_html, page, config, None)
+
+        # Should contain JavaScript for hash redirects
+        assert "<script>" in result
+        assert "section1" in result
+        assert "section2" in result
+        assert "new-section1" in result
+        assert "new-section2" in result
+
+        # Test post-build HTML generation
+        integration_plugin.on_post_build(config)
+
+        # Should generate HTML files for non-existing pages
+        assert len(mock_write_html) == 1
+        _, old_path, new_path, anchor_list = mock_write_html[0]
+        assert old_path == "another-page.html"
+        assert len(anchor_list) == 1
+        assert anchor_list[0][0] == "#old-hash"
+
+    def test_integration_directory_urls(self, integration_plugin, mock_write_html):
+        """Test hash redirects with directory URLs enabled."""
+        config = {"use_directory_urls": True, "site_dir": "site"}
+
+        # Test page content injection
+        page = Page(None, integration_plugin.doc_pages["old-page.md"], config)
+        original_html = "<html><body>Content</body></html>"
+        result = integration_plugin.on_page_content(original_html, page, config, None)
+
+        # Should still contain JavaScript for hash redirects
+        assert "<script>" in result
+        assert "section1" in result
+        assert "section2" in result
+
+        # Test post-build HTML generation
+        integration_plugin.on_post_build(config)
+
+        # Should generate HTML files with directory structure
+        assert len(mock_write_html) == 1
+        _, old_path, new_path, anchor_list = mock_write_html[0]
+        assert "another-page/index.html" in old_path
+        assert len(anchor_list) == 1
