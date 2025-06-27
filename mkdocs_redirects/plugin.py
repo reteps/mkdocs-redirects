@@ -2,8 +2,6 @@
 Copyright 2019-2022 DataRobot, Inc. and its affiliates.
 All rights reserved.
 """
-from __future__ import annotations
-
 import os
 import posixpath
 from typing import TypedDict
