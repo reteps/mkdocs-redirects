@@ -181,6 +181,9 @@ class RedirectPlugin(BasePlugin):
         for old_hash, new_link in hash_redirects:
             log.info(f"Injecting redirect for '{page_old}{old_hash}' to '{new_link}'")
 
+        if len(hash_redirects) == 0:
+            raise Exception(f"No hash redirects found for {page_old}")
+
         js_redirects = JS_INJECT_EXISTS.format(
             redirects=gen_anchor_redirects(hash_redirects)
         )
@@ -235,7 +238,6 @@ class RedirectPlugin(BasePlugin):
                 log.info(f"Creating redirect for '{page_old}{old_hash}' to '{new_link}'")
 
             # Create a new HTML file for the redirect.
-            dest_path = get_relative_html_path(page_old, dest_path, use_directory_urls)
             write_html(
                 config["site_dir"],
                 get_html_path(page_old, use_directory_urls),

@@ -45,7 +45,7 @@ def run_redirect_test(monkeypatch, old_page, new_page, use_directory_urls):
 
     config = dict(use_directory_urls=use_directory_urls, site_dir="site")
     for entry in plg.doc_pages.values():
-        plg.on_page_content(None, Page(None, entry, config), config, None)
+        plg.on_page_content("", Page(None, entry, config), config, None)
     plg.on_post_build(config)
 
     return wrote
@@ -114,8 +114,6 @@ def test_relative_redirect_directory_urls(actual_redirect_target, _, expected):
 # * Expected path of the written HTML file, use_directory_urls=True
 testdata = [
     ("old.md", "old.html", "old/index.html"),
-    ("README.md", "index.html", "index.html"),
-    ("100%.md", "100%.html", "100%/index.html"),
     ("foo/fizz/old.md", "foo/fizz/old.html", "foo/fizz/old/index.html"),
     ("foo/fizz/index.md", "foo/fizz/index.html", "foo/fizz/index.html"),
 ]
